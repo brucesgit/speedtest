@@ -1,0 +1,30 @@
+{
+  "name": "@brucesgit/speedtest-net",
+  "description": "Based on speedtest-net and make it can be used in the browser",
+  "author": "Bruce Lin",
+  "version": "0.0.1",
+  "scripts": {
+    "test": "node test/test"
+  },
+  "main": "index.js",
+  "keywords": [
+    "speed",
+    "speedtest",
+    "internet speed",
+    "network speed",
+    "internet",
+    "network",
+    "ping"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/brucesgit/speedtest.git"
+  },
+  "devDependencies": {
+    "eslint": "^4.14.0"
+  },
+  "dependencies": {
+    "browser-process-hrtime": "^0.1.2",
+    "speedtest-net": "^1.4.2"
+  }
+}
