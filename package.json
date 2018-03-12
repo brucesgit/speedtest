@@ -1,8 +1,8 @@
 {
   "name": "@brucesgit/speedtest-net",
   "description": "Based on speedtest-net and make it can be used in the browser",
-  "author": "Bruce Lin",
-  "version": "0.1.0",
+  "author": "BruceLin",
+  "version": "0.0.2",
   "license": "MIT",
   "scripts": {
     "test": "node test/test"
