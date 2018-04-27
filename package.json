@@ -1,31 +1,25 @@
 {
-  "name": "@brucesgit/speedtest-net",
-  "description": "Based on speedtest-net and make it can be used in the browser",
-  "author": "BruceLin",
-  "version": "0.0.2",
-  "license": "MIT",
-  "scripts": {
-    "test": "node test/test"
-  },
-  "main": "index.js",
-  "keywords": [
-    "speed",
-    "speedtest",
-    "internet speed",
-    "network speed",
-    "internet",
-    "network",
-    "ping"
-  ],
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/brucesgit/speedtest.git"
-  },
-  "devDependencies": {
-    "eslint": "^4.14.0"
-  },
-  "dependencies": {
-    "browser-process-hrtime": "^0.1.2",
-    "speedtest-net": "^1.4.2"
-  }
+	"name": "speedtest-net",
+	"description": "Speedtest.net client",
+	"author": "DDSol",
+	"version": "2.1.0",
+	"scripts": {
+		"test": "node test/test"
+	},
+	"bin": "bin/index.js",
+	"main": "index.js",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/ddsol/speedtest.net.git"
+	},
+	"dependencies": {
+		"browser-process-hrtime": "^0.1.2",
+		"chalk": "^2.3.1",
+		"draftlog": "^1.0.12",
+		"random-uuid": "^1.0.2",
+		"react-native-md5": "^1.0.0",
+		"react-native-xml2js": "^1.0.3",
+		"url": "^0.11.0"
+	},
+	"devDependencies": {}
 }
