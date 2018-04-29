@@ -1,5 +1,5 @@
 {
-    "name": "@brucesgit/speedtest-net",
+    "name": "@brucesgit/speedtest",
     "description": "Based on speedtest-net and make it can be used in the browser",
     "author": "BruceLin",
     "version": "0.0.3",
