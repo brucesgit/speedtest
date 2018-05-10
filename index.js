@@ -38,7 +38,8 @@ var parseXML = require('react-native-xml2js').parseString,
 	md5 = require('react-native-md5'),
 	http = require('http'),
     hrtime = require('browser-process-hrtime'),
-    randomUuid = require('random-uuid');
+    randomUuid = require('random-uuid'),
+    aborted = false;
 
 function findPropertiesInEnvInsensitive(prop) {
 	prop = prop.toLowerCase();
@@ -86,7 +87,10 @@ function distance(origin, destination) {
 }
 
 function getHttp(theUrl, discard, callback) {
-	var options;
+    if (aborted) {
+        return;
+    }
+	var options, request;
 
 	if (!callback) {
 		callback = discard;
@@ -110,8 +114,11 @@ function getHttp(theUrl, discard, callback) {
 			'.' +
 			Math.trunc(Math.random() * 400 + 103) +
 			' Safari/537.36';
-	http
-		.get(options, function(res) {
+        request = http.get(options, function(res) {
+            if (aborted) {
+                request.end();
+                return;
+            }
 			if (res.statusCode === 302) {
 				return getHttp(res.headers.location, discard, callback);
 			}
@@ -156,6 +163,10 @@ function postHttp(theUrl, data, callback) {
 	delete options.protocol;
 
 	req = http.request(options, function(res) {
+        if (aborted) {
+            req.end();
+            return;
+        }
 		var data = '';
 		res.setEncoding('utf8');
 		res.on('error', callback);
@@ -208,6 +219,11 @@ function randomPutHttp(theUrl, size, callback) {
 
 	delete options.protocol;
 	request = http.request(options, function(response) {
+        if (aborted) {
+            request.end();
+            return;
+        }
+
 		response.on('data', function(newData) {
 			//discard
 		});
@@ -216,7 +232,7 @@ function randomPutHttp(theUrl, size, callback) {
 			var diff = size - toSend;
 			callback(null, diff);
 		});
-	});
+    });
 
 	function write() {
 		do {
@@ -254,40 +270,107 @@ function getXML(xmlurl, callback) {
 function pingServer(server, callback) {
 	callback = once(callback);
 
-	var total = 9,
+	var total = 4,
 		done = 0,
-		bestTime = 3600;
+        bestTime = 3600,
+        ws = null,
+        start = null,
+        complete = false,
+        gotPingResponse = false,
+        isSupportWebsocket = typeof WebSocket != 'undefined';
 
-	function nextPing() {
-		var start = hrtime(),
-			complete;
+    if (!isSupportWebsocket) {
+        complete = !1;
+        total = 6;
+        ws = new WebSocket("ws://" + server.host + "/ws");
+        ws.onopen = function (e) {
+            ws.send("HI");
+            ws.send("PING ");
+            start = hrtime();
+        };
 
+        ws.onmessage = function (e) {
+            var t = this;
+            if (ws.readyState !== ws.OPEN) {
+                ws = new WebSocket("ws://" + server.host + "/ws");
+                return;
+            }
+            if (gotPingResponse) {
+                if (complete) return; // already hit timeout
+                var diff = hrtime(start);
+                diff = diff[0] + diff[1] * 1e-9; //seconds
+                if (diff < bestTime) bestTime = diff;
+                done++;
+                if (done === total) {
+                    complete = true;
+                    ws.close();
+                    if (bestTime >= 3600) return callback(new Error('Ping failed'));
+                    return callback(null, bestTime * 1000); //ms
+                } else {
+                    start = hrtime();
+                    ws.send("PING " + start);
+                }
+            } else
+                _readAsText(e.data, function (result){
+                    result.match(/^PONG/) && (gotPingResponse = true, start = hrtime(), ws.send("PING "  + start))
+                })
+        };
+
+        ws.onclose = function (e) {
+            !complete && (ws = new WebSocket("ws://" + server.host + "/ws"))
+        };
+
+        ws.onerror = function (e) {
+            return callback(new Error('Ping timeout'))
+        };
+
+        function _readAsText (data, callback) {
+            if (!(data instanceof Blob || data instanceof File))
+                return callback(data);
+            var reader = new FileReader();
+            reader.readAsText(data, 'utf-8');
+            reader.onload = function (e) {
+                callback(reader.result);
+            }
+        }
 		setTimeout(function() {
 			if (!complete) {
 				complete = true;
 				return callback(new Error('Ping timeout'));
 			}
 		}, 5000);
-
-		getHttp(url.resolve(server.url, 'latency.txt' + '?nocache=' + randomUuid()), function(err, data) {
-			if (complete) return; // already hit timeout
-			complete = true;
-			var diff = hrtime(start);
-			diff = diff[0] + diff[1] * 1e-9; //seconds
-			if (!err && data.substr(0, 9) !== 'test=test') err = new Error('Unknown latency file');
-			if (err) diff = 3600; //an hour...
-			if (diff < bestTime) bestTime = diff;
-			done++;
-			if (done === total) {
-				if (bestTime >= 3600) return callback(new Error('Ping failed'));
-				return callback(null, bestTime * 1000); //ms
-			} else {
-				nextPing();
-			}
-		});
-	}
-
-	nextPing();
+    } else {
+        function nextPing() {
+            start = hrtime();
+            complete = !1;
+    
+            setTimeout(function() {
+                if (!complete) {
+                    complete = true;
+                    return callback(new Error('Ping timeout'));
+                }
+            }, 5000);
+    
+            getHttp(url.resolve(server.url, 'latency.txt' + '?nocache=' + randomUuid()), function(err, data) {
+                if (complete) return; // already hit timeout
+                complete = true;
+                var diff = hrtime(start);
+                diff = diff[0] + diff[1] * 1e-9; //seconds
+                if (!err && data.substr(0, 9) !== 'test=test') err = new Error('Unknown latency file');
+                if (err) diff = 3600; //an hour...
+                if (diff < bestTime) bestTime = diff;
+                done++;
+                if (done === total) {
+                    if (bestTime >= 3600) return callback(new Error('Ping failed'));
+                    return callback(null, bestTime * 1000); //ms
+                } else {
+                    nextPing();
+                }
+            });
+        }
+        nextPing();
+    }
+	
 }
 
 function pingServers(servers, count, callback) {
@@ -489,8 +572,10 @@ function speedTest(options) {
 			'https://www.speedtest.net/speedtest-servers.php?really=absolutely',
 		],
 		curServer = 0,
-		serversUrl;
+        serversUrl;
 
+    aborted = false;
+    
 	options = options || {};
 
 	options.maxTime = options.maxTime || 10000;
@@ -701,7 +786,7 @@ function speedTest(options) {
         cc: 'US',
         sponsor: 'T-Mobile',
         id: '1861',
-        host: '208.54.87.70:8080',
+        host: '208.54.87.70/ws',
         dist: 114.3911751633326,
         bestPing: 37.36689500000001 }
       */
@@ -808,6 +893,9 @@ function speedTest(options) {
 		});
 	}
 
+    self.abort = function () {
+        aborted = true;
+    }
 	return self;
 }
 
