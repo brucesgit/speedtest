@@ -2,7 +2,7 @@
     "name": "@lovanya/speedtest",
     "description": "Based on speedtest-net and make it can be used in the browser",
     "author": "BruceLin",
-    "version": "0.0.5",
+    "version": "0.0.6",
     "license": "MIT",
     "scripts": {
         "test": "node test/test"
@@ -20,7 +20,8 @@
         "random-uuid": "^1.0.2",
         "react-native-md5": "^1.0.0",
         "react-native-xml2js": "^1.0.3",
-        "url": "^0.11.0"
+        "url": "^0.11.0",
+        "wind-dom": "0.0.3"
     },
     "devDependencies": {}
 }

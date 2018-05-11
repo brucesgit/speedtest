@@ -40,7 +40,7 @@ var parseXML = require('react-native-xml2js').parseString,
     hrtime = require('browser-process-hrtime'),
     randomUuid = require('random-uuid'),
     aborted = false,
-    isBrowserSide = typeof window !== 'undefined' && window === this;
+    isBrowserSide = typeof window !== 'undefined';
 
 function findPropertiesInEnvInsensitive(prop) {
     prop = prop.toLowerCase();
@@ -281,6 +281,7 @@ function pingServer(server, callback) {
         isSupportWebsocket = typeof WebSocket != 'undefined';
 
     if (isBrowserSide && isSupportWebsocket) {
+        var EventCreator = require('wind-dom');
         complete = !1;
         total = 6;
         ws = new WebSocket("ws://" + server.host + "/ws");
@@ -330,9 +331,9 @@ function pingServer(server, callback) {
                 return callback(data);
             var reader = new FileReader();
             reader.readAsText(data, 'utf-8');
-            reader.onload = function (e) {
+            EventCreator.on(reader, 'loadend', function (e) {
                 callback(reader.result);
-            }
+            });
         }
         setTimeout(function () {
             if (!complete) {
