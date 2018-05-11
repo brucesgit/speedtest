@@ -29,249 +29,250 @@ SOFTWARE.
 'use strict';
 
 var parseXML = require('react-native-xml2js').parseString,
-	EventEmitter = require('events').EventEmitter,
-	// These numbers were obtained by measuring and averaging both using this module and the official speedtest.net
-	speedTestDownloadCorrectionFactor = 1.335,
-	speedTestUploadCorrectionFactor = 1.339,
-	proxyOptions = null,
-	url = require('url'),
-	md5 = require('react-native-md5'),
-	http = require('http'),
+    EventEmitter = require('events').EventEmitter,
+    // These numbers were obtained by measuring and averaging both using this module and the official speedtest.net
+    speedTestDownloadCorrectionFactor = 1.335,
+    speedTestUploadCorrectionFactor = 1.339,
+    proxyOptions = null,
+    url = require('url'),
+    md5 = require('react-native-md5'),
+    http = require('http'),
     hrtime = require('browser-process-hrtime'),
     randomUuid = require('random-uuid'),
-    aborted = false;
+    aborted = false,
+    isBrowserSide = typeof window !== 'undefined' && window === this;
 
 function findPropertiesInEnvInsensitive(prop) {
-	prop = prop.toLowerCase();
-	for (var p in process.env) {
-		if (process.env.hasOwnProperty(p) && prop === p.toLowerCase()) {
-			return process.env[p];
-		}
-	}
-	return null;
+    prop = prop.toLowerCase();
+    for (var p in process.env) {
+        if (process.env.hasOwnProperty(p) && prop === p.toLowerCase()) {
+            return process.env[p];
+        }
+    }
+    return null;
 }
 
 function once(callback) {
-	if (typeof callback !== 'function') {
-		callback = function() {};
-	}
-	return function() {
-		if (callback) {
-			callback.apply(this, arguments);
-			callback = null;
-		}
-	};
+    if (typeof callback !== 'function') {
+        callback = function () {};
+    }
+    return function () {
+        if (callback) {
+            callback.apply(this, arguments);
+            callback = null;
+        }
+    };
 }
 
 function distance(origin, destination) {
-	var lat1 = origin.lat,
-		lon1 = origin.lon,
-		lat2 = destination.lat,
-		lon2 = destination.lon,
-		radius = 6371, //km
-		dlat = deg2rad(lat2 - lat1),
-		dlon = deg2rad(lon2 - lon1),
-		a,
-		c;
+    var lat1 = origin.lat,
+        lon1 = origin.lon,
+        lat2 = destination.lat,
+        lon2 = destination.lon,
+        radius = 6371, //km
+        dlat = deg2rad(lat2 - lat1),
+        dlon = deg2rad(lon2 - lon1),
+        a,
+        c;
 
-	a =
-		Math.sin(dlat / 2) * Math.sin(dlat / 2) +
-		Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat2)) * Math.sin(dlon / 2) * Math.sin(dlon / 2);
-	c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    a =
+        Math.sin(dlat / 2) * Math.sin(dlat / 2) +
+        Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat2)) * Math.sin(dlon / 2) * Math.sin(dlon / 2);
+    c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 
-	return radius * c;
+    return radius * c;
 
-	function deg2rad(d) {
-		return d / 180 * Math.PI;
-	}
+    function deg2rad(d) {
+        return d / 180 * Math.PI;
+    }
 }
 
 function getHttp(theUrl, discard, callback) {
     if (aborted) {
         return;
     }
-	var options, request;
+    var options, request;
 
-	if (!callback) {
-		callback = discard;
-		discard = false;
-	}
+    if (!callback) {
+        callback = discard;
+        discard = false;
+    }
 
-	callback = once(callback);
+    callback = once(callback);
 
-	options = theUrl;
+    options = theUrl;
 
-	if (typeof options === 'string') options = url.parse(options);
+    if (typeof options === 'string') options = url.parse(options);
 
-	delete options.protocol;
+    delete options.protocol;
 
-	options.headers = options.headers || {};
-	options.method = 'GET';
-	options.headers['user-agent'] =
-		options.headers['user-agent'] ||
-		'Mozilla/5.0 (Windows NT 6.3) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/51.0.' +
-			Math.trunc(Math.random() * 400 + 2704) +
-			'.' +
-			Math.trunc(Math.random() * 400 + 103) +
-			' Safari/537.36';
-        request = http.get(options, function(res) {
+    options.headers = options.headers || {};
+    options.method = 'GET';
+    options.headers['user-agent'] =
+        options.headers['user-agent'] ||
+        'Mozilla/5.0 (Windows NT 6.3) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/51.0.' +
+        Math.trunc(Math.random() * 400 + 2704) +
+        '.' +
+        Math.trunc(Math.random() * 400 + 103) +
+        ' Safari/537.36';
+    request = http.get(options, function (res) {
             if (aborted) {
                 request.end();
                 return;
             }
-			if (res.statusCode === 302) {
-				return getHttp(res.headers.location, discard, callback);
-			}
-			var data = '',
-				count = 0;
+            if (res.statusCode === 302) {
+                return getHttp(res.headers.location, discard, callback);
+            }
+            var data = '',
+                count = 0;
 
-			if (!discard) res.setEncoding('utf8');
-			res.on('error', callback);
-			res.on('data', function(newData) {
-				count += newData.length;
-				if (!discard) data += newData;
-			});
-			res.on('end', function() {
-				if (discard) data = count;
-				callback(null, data, res.statusCode);
-			});
-		})
-		.on('error', callback);
+            if (!discard) res.setEncoding('utf8');
+            res.on('error', callback);
+            res.on('data', function (newData) {
+                count += newData.length;
+                if (!discard) data += newData;
+            });
+            res.on('end', function () {
+                if (discard) data = count;
+                callback(null, data, res.statusCode);
+            });
+        })
+        .on('error', callback);
 }
 
 function postHttp(theUrl, data, callback) {
-	if (!callback) {
-		callback = data;
-		data = '';
-	}
+    if (!callback) {
+        callback = data;
+        data = '';
+    }
 
-	callback = once(callback);
+    callback = once(callback);
 
-	var options = theUrl,
-		req;
+    var options = theUrl,
+        req;
 
-	if (typeof options === 'string') options = url.parse(options);
+    if (typeof options === 'string') options = url.parse(options);
 
-	options.headers = options.headers || {};
-	options.headers['user-agent'] =
-		options.headers['user-agent'] ||
-		'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.8; rv:24.0) Gecko/20100101 Firefox/24.0';
-	options.headers['content-type'] = 'application/x-www-form-urlencoded';
-	options.headers['content-length'] = data.length;
-	options.method = 'POST';
+    options.headers = options.headers || {};
+    options.headers['user-agent'] =
+        options.headers['user-agent'] ||
+        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.8; rv:24.0) Gecko/20100101 Firefox/24.0';
+    options.headers['content-type'] = 'application/x-www-form-urlencoded';
+    options.headers['content-length'] = data.length;
+    options.method = 'POST';
 
-	delete options.protocol;
+    delete options.protocol;
 
-	req = http.request(options, function(res) {
+    req = http.request(options, function (res) {
         if (aborted) {
             req.end();
             return;
         }
-		var data = '';
-		res.setEncoding('utf8');
-		res.on('error', callback);
-		res.on('data', function(newData) {
-			data += newData;
-		});
-		res.on('end', function() {
-			callback(null, data, res.statusCode);
-		});
-	});
+        var data = '';
+        res.setEncoding('utf8');
+        res.on('error', callback);
+        res.on('data', function (newData) {
+            data += newData;
+        });
+        res.on('end', function () {
+            callback(null, data, res.statusCode);
+        });
+    });
 
-	req.on('error', callback);
+    req.on('error', callback);
 
-	req.end(data);
+    req.end(data);
 }
 
 function randomPutHttp(theUrl, size, callback) {
-	callback = once(callback);
+    callback = once(callback);
 
-	size = (size || 131072) | 0; //eslint-disable-line no-bitwise
+    size = (size || 131072) | 0; //eslint-disable-line no-bitwise
 
-	var options = theUrl,
-		headers = {
-			'user-agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.8; rv:24.0) Gecko/20100101 Firefox/24.0',
-			'content-length': size,
-			'content-type': 'text/plain',
-		},
-		toSend = size,
-		sent1 = false,
-		dataBlock,
-		headerName,
-		request;
+    var options = theUrl,
+        headers = {
+            'user-agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.8; rv:24.0) Gecko/20100101 Firefox/24.0',
+            'content-length': size,
+            'content-type': 'text/plain',
+        },
+        toSend = size,
+        sent1 = false,
+        dataBlock,
+        headerName,
+        request;
 
-	if (typeof options === 'string') options = url.parse(theUrl);
+    if (typeof options === 'string') options = url.parse(theUrl);
 
-	options.headers = options.headers || {};
+    options.headers = options.headers || {};
 
-	for (headerName in headers) {
-		options.headers[headerName] = options.headers[headerName] || headers[headerName];
-	}
+    for (headerName in headers) {
+        options.headers[headerName] = options.headers[headerName] || headers[headerName];
+    }
 
-	options.method = 'POST';
-	options.mode = 'disable-fetch';
+    options.method = 'POST';
+    options.mode = 'disable-fetch';
 
-	dataBlock = (function() {
-		var d = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
-		while (d.length < 1024 * 16) d += d;
-		return d.substr(0, 1024 * 16);
-	})();
+    dataBlock = (function () {
+        var d = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+        while (d.length < 1024 * 16) d += d;
+        return d.substr(0, 1024 * 16);
+    })();
 
-	delete options.protocol;
-	request = http.request(options, function(response) {
+    delete options.protocol;
+    request = http.request(options, function (response) {
         if (aborted) {
             request.end();
             return;
         }
 
-		response.on('data', function(newData) {
-			//discard
-		});
-		response.on('end', function() {
-			// Some cases (like HTTP 413) will interrupt the upload, but still return a response
-			var diff = size - toSend;
-			callback(null, diff);
-		});
+        response.on('data', function (newData) {
+            //discard
+        });
+        response.on('end', function () {
+            // Some cases (like HTTP 413) will interrupt the upload, but still return a response
+            var diff = size - toSend;
+            callback(null, diff);
+        });
     });
 
-	function write() {
-		do {
-			if (!toSend) {
-				request.end();
-				return; //we're done sending...
-			}
-			var data = dataBlock;
-			if (!sent1) {
-				sent1 = true;
-				data = 'content1=' + data;
-			}
-			data = data.substr(0, toSend);
-			toSend -= data.length;
-		} while (request.write(data));
-	}
+    function write() {
+        do {
+            if (!toSend) {
+                request.end();
+                return; //we're done sending...
+            }
+            var data = dataBlock;
+            if (!sent1) {
+                sent1 = true;
+                data = 'content1=' + data;
+            }
+            data = data.substr(0, toSend);
+            toSend -= data.length;
+        } while (request.write(data));
+    }
 
-	request.on('error', callback);
-	request.on('drain', write);
+    request.on('error', callback);
+    request.on('drain', write);
 
-	write();
+    write();
 }
 
 function getXML(xmlurl, callback) {
-	callback = once(callback);
-	getHttp(xmlurl, function(err, data) {
-		if (err) return callback(err);
-		parseXML(data, function(err, xml) {
-			if (err) return callback(err);
-			callback(null, xml);
-		});
-	});
+    callback = once(callback);
+    getHttp(xmlurl, function (err, data) {
+        if (err) return callback(err);
+        parseXML(data, function (err, xml) {
+            if (err) return callback(err);
+            callback(null, xml);
+        });
+    });
 }
 
 function pingServer(server, callback) {
-	callback = once(callback);
+    callback = once(callback);
 
-	var total = 4,
-		done = 0,
+    var total = 4,
+        done = 0,
         bestTime = 3600,
         ws = null,
         start = null,
@@ -279,7 +280,7 @@ function pingServer(server, callback) {
         gotPingResponse = false,
         isSupportWebsocket = typeof WebSocket != 'undefined';
 
-    if (!isSupportWebsocket) {
+    if (isBrowserSide && isSupportWebsocket) {
         complete = !1;
         total = 6;
         ws = new WebSocket("ws://" + server.host + "/ws");
@@ -311,8 +312,8 @@ function pingServer(server, callback) {
                     ws.send("PING " + start);
                 }
             } else
-                _readAsText(e.data, function (result){
-                    result.match(/^PONG/) && (gotPingResponse = true, start = hrtime(), ws.send("PING "  + start))
+                _readAsText(e.data, function (result) {
+                    result.match(/^PONG/) && (gotPingResponse = true, start = hrtime(), ws.send("PING " + start))
                 })
         };
 
@@ -324,7 +325,7 @@ function pingServer(server, callback) {
             return callback(new Error('Ping timeout'))
         };
 
-        function _readAsText (data, callback) {
+        function _readAsText(data, callback) {
             if (!(data instanceof Blob || data instanceof File))
                 return callback(data);
             var reader = new FileReader();
@@ -333,25 +334,25 @@ function pingServer(server, callback) {
                 callback(reader.result);
             }
         }
-		setTimeout(function() {
-			if (!complete) {
-				complete = true;
-				return callback(new Error('Ping timeout'));
-			}
-		}, 5000);
+        setTimeout(function () {
+            if (!complete) {
+                complete = true;
+                return callback(new Error('Ping timeout'));
+            }
+        }, 5000);
     } else {
         function nextPing() {
             start = hrtime();
             complete = !1;
-    
-            setTimeout(function() {
+
+            setTimeout(function () {
                 if (!complete) {
                     complete = true;
                     return callback(new Error('Ping timeout'));
                 }
             }, 5000);
-    
-            getHttp(url.resolve(server.url, 'latency.txt' + '?nocache=' + randomUuid()), function(err, data) {
+
+            getHttp(url.resolve(server.url, 'latency.txt' + '?nocache=' + randomUuid()), function (err, data) {
                 if (complete) return; // already hit timeout
                 complete = true;
                 var diff = hrtime(start);
@@ -370,414 +371,414 @@ function pingServer(server, callback) {
         }
         nextPing();
     }
-	
+
 }
 
 function pingServers(servers, count, callback) {
-	var result = [],
-		todo = Math.min(count, servers.length),
-		done = 0,
-		serverIndex;
+    var result = [],
+        todo = Math.min(count, servers.length),
+        done = 0,
+        serverIndex;
 
-	for (serverIndex = 0; serverIndex < todo; serverIndex++) {
-		(function(server) {
-			result.push(server);
-			server.bestPing = 3600;
-			pingServer(server, function(err, bestTime) {
-				if (bestTime < 10 && server.dist < 2) {
-					//too close! Same datacenter? upload speeds of several GB/s ?? Bad measurment...
-					bestTime = 100;
-				}
-				if (err) {
-					server.bestPing = 3600;
-				} else {
-					server.bestPing = bestTime;
-				}
-				done++;
-				if (done === todo) {
-					result.sort(function(a, b) {
-						return a.bestPing - b.bestPing;
-					});
-					callback(null, result);
-				}
-			});
-		})(servers[serverIndex]);
-	}
-	if (todo === 0) {
-		setImmediate(callback, null, []);
-	}
+    for (serverIndex = 0; serverIndex < todo; serverIndex++) {
+        (function (server) {
+            result.push(server);
+            server.bestPing = 3600;
+            pingServer(server, function (err, bestTime) {
+                if (bestTime < 10 && server.dist < 2) {
+                    //too close! Same datacenter? upload speeds of several GB/s ?? Bad measurment...
+                    bestTime = 100;
+                }
+                if (err) {
+                    server.bestPing = 3600;
+                } else {
+                    server.bestPing = bestTime;
+                }
+                done++;
+                if (done === todo) {
+                    result.sort(function (a, b) {
+                        return a.bestPing - b.bestPing;
+                    });
+                    callback(null, result);
+                }
+            });
+        })(servers[serverIndex]);
+    }
+    if (todo === 0) {
+        setImmediate(callback, null, []);
+    }
 }
 
 function downloadSpeed(urls, maxTime, callback) {
-	var concurrent = 2,
-		running = 0,
-		started = 0,
-		done = 0,
-		todo = urls.length,
-		totalBytes = 0,
-		emit,
-		timeStart;
+    var concurrent = 2,
+        running = 0,
+        started = 0,
+        done = 0,
+        todo = urls.length,
+        totalBytes = 0,
+        emit,
+        timeStart;
 
-	callback = once(callback);
+    callback = once(callback);
 
-	maxTime = (maxTime || 10000) / 1000;
+    maxTime = (maxTime || 10000) / 1000;
 
-	if (this.emit) {
-		emit = this.emit.bind(this);
-	} else {
-		emit = function() {};
-	}
+    if (this.emit) {
+        emit = this.emit.bind(this);
+    } else {
+        emit = function () {};
+    }
 
-	next();
+    next();
 
-	timeStart = hrtime();
+    timeStart = hrtime();
 
-	function next() {
-		if (started >= todo) return; //all are started
-		if (running >= concurrent) return;
-		running++;
+    function next() {
+        if (started >= todo) return; //all are started
+        if (running >= concurrent) return;
+        running++;
 
-		var starting = started,
-			url = urls[starting];
+        var starting = started,
+            url = urls[starting];
 
-		started++;
+        started++;
 
-		getHttp(url, true, function(err, count) {
-			//discard all data and return byte count
-			if (err) return callback(err);
-			var diff = hrtime(timeStart),
-				timePct,
-				amtPct,
-				speed,
-				fixed;
+        getHttp(url, true, function (err, count) {
+            //discard all data and return byte count
+            if (err) return callback(err);
+            var diff = hrtime(timeStart),
+                timePct,
+                amtPct,
+                speed,
+                fixed;
 
-			diff = diff[0] + diff[1] * 1e-9; //seconds
+            diff = diff[0] + diff[1] * 1e-9; //seconds
 
-			running--;
-			totalBytes += count;
-			done++;
-			speed = totalBytes / diff;
-			fixed = speed * speedTestDownloadCorrectionFactor / 125000;
+            running--;
+            totalBytes += count;
+            done++;
+            speed = totalBytes / diff;
+            fixed = speed * speedTestDownloadCorrectionFactor / 125000;
 
-			timePct = diff / maxTime * 100;
-			// amtPct=done/todo*100;
-			amtPct = 0; //time-only
+            timePct = diff / maxTime * 100;
+            // amtPct=done/todo*100;
+            amtPct = 0; //time-only
 
-			if (diff > maxTime) {
-				done = todo;
-			}
-			if (done <= todo) {
-				emit('downloadprogress', Math.round(Math.min(Math.max(timePct, amtPct), 100.0) * 10) / 10);
-				emit('downloadspeedprogress', fixed);
-			}
-			if (done >= todo) {
-				callback(null, speed); //bytes/sec
-			} else {
-				next();
-			}
-		});
+            if (diff > maxTime) {
+                done = todo;
+            }
+            if (done <= todo) {
+                emit('downloadprogress', Math.round(Math.min(Math.max(timePct, amtPct), 100.0) * 10) / 10);
+                emit('downloadspeedprogress', fixed);
+            }
+            if (done >= todo) {
+                callback(null, speed); //bytes/sec
+            } else {
+                next();
+            }
+        });
 
-		next(); //Try another
-	}
+        next(); //Try another
+    }
 }
 
 function uploadSpeed(url, sizes, maxTime, callback) {
-	var concurrent = 2,
-		running = 0,
-		started = 0,
-		done = 0,
-		todo = sizes.length,
-		totalBytes = 0,
-		emit,
-		timeStart;
+    var concurrent = 2,
+        running = 0,
+        started = 0,
+        done = 0,
+        todo = sizes.length,
+        totalBytes = 0,
+        emit,
+        timeStart;
 
-	callback = once(callback);
-	maxTime = (maxTime || 10000) / 1000;
+    callback = once(callback);
+    maxTime = (maxTime || 10000) / 1000;
 
-	if (this.emit) {
-		emit = this.emit.bind(this);
-	} else {
-		emit = function() {};
-	}
+    if (this.emit) {
+        emit = this.emit.bind(this);
+    } else {
+        emit = function () {};
+    }
 
-	next();
+    next();
 
-	timeStart = hrtime();
+    timeStart = hrtime();
 
-	function next() {
-		if (started >= todo) return; //all are started
-		if (running >= concurrent) return;
-		running++;
-		var starting = started,
-			size = sizes[starting];
+    function next() {
+        if (started >= todo) return; //all are started
+        if (running >= concurrent) return;
+        running++;
+        var starting = started,
+            size = sizes[starting];
 
-		started++;
-		//started=(started+1) % todo; //Keep staing more until the time is up...
-		randomPutHttp(url, size, function(err, count) {
-			if (err) return callback(err);
-			//discard all data and return byte count
-			if (done >= todo) return;
+        started++;
+        //started=(started+1) % todo; //Keep staing more until the time is up...
+        randomPutHttp(url, size, function (err, count) {
+            if (err) return callback(err);
+            //discard all data and return byte count
+            if (done >= todo) return;
 
-			if (err) {
-				count = 0;
-			}
-			var diff = hrtime(timeStart),
-				timePct,
-				amtPct,
-				speed,
-				fixed;
+            if (err) {
+                count = 0;
+            }
+            var diff = hrtime(timeStart),
+                timePct,
+                amtPct,
+                speed,
+                fixed;
 
-			diff = diff[0] + diff[1] * 1e-9; //seconds
+            diff = diff[0] + diff[1] * 1e-9; //seconds
 
-			running--;
-			totalBytes += count;
-			done++;
-			speed = totalBytes / diff;
-			fixed = speed * speedTestUploadCorrectionFactor / 125000;
+            running--;
+            totalBytes += count;
+            done++;
+            speed = totalBytes / diff;
+            fixed = speed * speedTestUploadCorrectionFactor / 125000;
 
-			timePct = diff / maxTime * 100;
-			amtPct = done / todo * 100;
-			amtPct = 0; //time-only
-			if (diff > maxTime) {
-				done = todo;
-			}
-			if (done <= todo) {
-				emit('uploadprogress', Math.round(Math.min(Math.max(timePct, amtPct), 100.0) * 10) / 10);
-				emit('uploadspeedprogress', fixed);
-			}
-			if (done >= todo) {
-				callback(null, speed); //bytes/sec
-			} else {
-				next();
-			}
-		});
+            timePct = diff / maxTime * 100;
+            amtPct = done / todo * 100;
+            amtPct = 0; //time-only
+            if (diff > maxTime) {
+                done = todo;
+            }
+            if (done <= todo) {
+                emit('uploadprogress', Math.round(Math.min(Math.max(timePct, amtPct), 100.0) * 10) / 10);
+                emit('uploadspeedprogress', fixed);
+            }
+            if (done >= todo) {
+                callback(null, speed); //bytes/sec
+            } else {
+                next();
+            }
+        });
 
-		next(); //Try another
-	}
+        next(); //Try another
+    }
 }
 
 function speedTest(options) {
-	options = options || {};
-	options.pingCount = options.pingCount || (options.serverId ? 1 : 5);
-	var self = new EventEmitter(),
-		speedInfo = {},
-		serversUrls = [
-			'http://www.speedtest.net/speedtest-servers-static.php',
-			'http://www.speedtest.net/speedtest-servers-static.php?really=yes',
-			'https://www.speedtest.net/speedtest-servers-static.php',
-			'https://www.speedtest.net/speedtest-servers-static.php?really=totally',
-			'http://www.speedtest.net/speedtest-servers.php',
-			'http://www.speedtest.net/speedtest-servers.php?really=sure',
-			'https://www.speedtest.net/speedtest-servers.php',
-			'https://www.speedtest.net/speedtest-servers.php?really=absolutely',
-		],
-		curServer = 0,
+    options = options || {};
+    options.pingCount = options.pingCount || (options.serverId ? 1 : 5);
+    var self = new EventEmitter(),
+        speedInfo = {},
+        serversUrls = [
+            'http://www.speedtest.net/speedtest-servers-static.php',
+            'http://www.speedtest.net/speedtest-servers-static.php?really=yes',
+            'https://www.speedtest.net/speedtest-servers-static.php',
+            'https://www.speedtest.net/speedtest-servers-static.php?really=totally',
+            'http://www.speedtest.net/speedtest-servers.php',
+            'http://www.speedtest.net/speedtest-servers.php?really=sure',
+            'https://www.speedtest.net/speedtest-servers.php',
+            'https://www.speedtest.net/speedtest-servers.php?really=absolutely',
+        ],
+        curServer = 0,
         serversUrl;
 
     aborted = false;
-    
-	options = options || {};
 
-	options.maxTime = options.maxTime || 10000;
-	options.pingCount = options.pingCount || (options.serverId ? 1 : 5);
-	options.maxServers = options.maxServers || 1;
-	options.proxy = options.proxy || null;
-	proxyOptions = options.proxy;
+    options = options || {};
 
-	function httpOpts(theUrl) {
-		var o = url.parse(theUrl);
-		o.headers = options.headers || {};
-		return o;
-	}
+    options.maxTime = options.maxTime || 10000;
+    options.pingCount = options.pingCount || (options.serverId ? 1 : 5);
+    options.maxServers = options.maxServers || 1;
+    options.proxy = options.proxy || null;
+    proxyOptions = options.proxy;
 
-	//Fetch config
+    function httpOpts(theUrl) {
+        var o = url.parse(theUrl);
+        o.headers = options.headers || {};
+        return o;
+    }
 
-	getXML(httpOpts('http://www.speedtest.net/speedtest-config.php'), gotConfig);
+    //Fetch config
 
-	function gotConfig(err, config) {
-		if (err) return self.emit('error', err);
-		config = (config && config.settings) || {};
+    getXML(httpOpts('http://www.speedtest.net/speedtest-config.php'), gotConfig);
 
-		function get(name) {
-			return ((config[name] || [])[0] || {}).$ || {};
-		}
+    function gotConfig(err, config) {
+        if (err) return self.emit('error', err);
+        config = (config && config.settings) || {};
 
-		var client = get('client'),
-			times = get('times'),
-			download = get('download'),
-			upload = get('upload');
+        function get(name) {
+            return ((config[name] || [])[0] || {}).$ || {};
+        }
 
-		speedInfo.config = {
-			client: client,
-			times: times,
-			download: download,
-			upload: upload,
-		};
+        var client = get('client'),
+            times = get('times'),
+            download = get('download'),
+            upload = get('upload');
 
-		self.emit('config', speedInfo.config);
-		self.emit('status', 'Found Servers');
-		gotData();
-	}
+        speedInfo.config = {
+            client: client,
+            times: times,
+            download: download,
+            upload: upload,
+        };
 
-	if (options.serversUrl) {
-		serversUrl = options.serversUrl;
-		curServer = -1;
-	}
+        self.emit('config', speedInfo.config);
+        self.emit('status', 'Found Servers');
+        gotData();
+    }
 
-	function nextServer(err) {
-		if (curServer >= serversUrls.length) {
-			return self.emit(
-				'error',
-				err ||
-					new Error(
-						'There was a problem getting the list of servers from SpeedTest.net. Consider using a custom serversUrl'
-					)
-			);
-		}
-		if (curServer < 0) {
-			curServer = serversUrls.length;
-		} else {
-			serversUrl = serversUrls[curServer];
-			curServer++;
-		}
-		getXML(httpOpts(serversUrl), gotServers);
-	}
+    if (options.serversUrl) {
+        serversUrl = options.serversUrl;
+        curServer = -1;
+    }
 
-	nextServer();
+    function nextServer(err) {
+        if (curServer >= serversUrls.length) {
+            return self.emit(
+                'error',
+                err ||
+                new Error(
+                    'There was a problem getting the list of servers from SpeedTest.net. Consider using a custom serversUrl'
+                )
+            );
+        }
+        if (curServer < 0) {
+            curServer = serversUrls.length;
+        } else {
+            serversUrl = serversUrls[curServer];
+            curServer++;
+        }
+        getXML(httpOpts(serversUrl), gotServers);
+    }
 
-	function gotServers(err, servers) {
-		if (err) return nextServer(err);
-		if (!servers || !servers.settings) {
-			return nextServer(new Error('No server found, verify your proxy/network'));
-		}
-		var server = servers.settings.servers[0].server,
-			serverIndex;
+    nextServer();
 
-		servers = [];
-		for (serverIndex = 0; serverIndex < server.length; serverIndex++) {
-			if (options.serverId && server[serverIndex].$.id === options.serverId) {
-				servers = [server[serverIndex].$];
-				break;
-			}
-			servers.push(server[serverIndex].$);
-		}
+    function gotServers(err, servers) {
+        if (err) return nextServer(err);
+        if (!servers || !servers.settings) {
+            return nextServer(new Error('No server found, verify your proxy/network'));
+        }
+        var server = servers.settings.servers[0].server,
+            serverIndex;
 
-		speedInfo.servers = servers;
+        servers = [];
+        for (serverIndex = 0; serverIndex < server.length; serverIndex++) {
+            if (options.serverId && server[serverIndex].$.id === options.serverId) {
+                servers = [server[serverIndex].$];
+                break;
+            }
+            servers.push(server[serverIndex].$);
+        }
 
-		self.emit('servers', servers);
-		gotData();
-	}
+        speedInfo.servers = servers;
 
-	function gotData() {
-		if (!speedInfo.config || !speedInfo.servers) return; //not ready yet
+        self.emit('servers', servers);
+        gotData();
+    }
 
-		//order servers by how close they are:
-		var servers = speedInfo.servers,
-			serverIndex,
-			server,
-			dist;
+    function gotData() {
+        if (!speedInfo.config || !speedInfo.servers) return; //not ready yet
 
-		for (serverIndex = 0; serverIndex < servers.length; serverIndex++) {
-			server = servers[serverIndex];
-			dist = distance(speedInfo.config.client, server);
+        //order servers by how close they are:
+        var servers = speedInfo.servers,
+            serverIndex,
+            server,
+            dist;
 
-			server.dist = dist;
-			server.distMi = dist * 0.621371;
-		}
+        for (serverIndex = 0; serverIndex < servers.length; serverIndex++) {
+            server = servers[serverIndex];
+            dist = distance(speedInfo.config.client, server);
 
-		servers.sort(function(a, b) {
-			return a.dist - b.dist;
-		});
+            server.dist = dist;
+            server.distMi = dist * 0.621371;
+        }
 
-		pingServers(servers, options.pingCount, function(err, bestServers) {
-			if (err) return self.emit('error', err);
-			if (!bestServers || !bestServers.length)
-				return self.emit('error', new Error('Could not find a server to test on.'));
+        servers.sort(function (a, b) {
+            return a.dist - b.dist;
+        });
 
-			speedInfo.bestServers = bestServers;
-			speedInfo.bestServer = speedInfo.bestServers[0];
-			self.emit('bestservers', bestServers);
+        pingServers(servers, options.pingCount, function (err, bestServers) {
+            if (err) return self.emit('error', err);
+            if (!bestServers || !bestServers.length)
+                return self.emit('error', new Error('Could not find a server to test on.'));
 
-			startDownload();
-		});
-	}
+            speedInfo.bestServers = bestServers;
+            speedInfo.bestServer = speedInfo.bestServers[0];
+            self.emit('bestservers', bestServers);
 
-	function startDownload(ix) {
-		self.emit('status', 'Testing Download');
-		ix = ix || 0;
-		if (ix >= speedInfo.bestServers.length || ix >= options.maxServers) return startUpload();
-		var server = speedInfo.bestServers[ix],
-			svrurl = server.url,
-			sizes = [350, 500, 750, 1000, 1500, 2000, 2500, 3000, 3500, 4000],
-			urls = [],
-			n,
-			i,
-			size;
+            startDownload();
+        });
+    }
 
-		for (n = 0; n < sizes.length; n++) {
-			size = sizes[n];
-			for (i = 0; i < 4; i++) {
-				urls.push(url.resolve(svrurl, 'random' + size + 'x' + size + '.jpg') + '?nocache=' + randomUuid());
-			}
-		}
+    function startDownload(ix) {
+        self.emit('status', 'Testing Download');
+        ix = ix || 0;
+        if (ix >= speedInfo.bestServers.length || ix >= options.maxServers) return startUpload();
+        var server = speedInfo.bestServers[ix],
+            svrurl = server.url,
+            sizes = [350, 500, 750, 1000, 1500, 2000, 2500, 3000, 3500, 4000],
+            urls = [],
+            n,
+            i,
+            size;
 
-		self.emit('testserver', server);
+        for (n = 0; n < sizes.length; n++) {
+            size = sizes[n];
+            for (i = 0; i < 4; i++) {
+                urls.push(url.resolve(svrurl, 'random' + size + 'x' + size + '.jpg') + '?nocache=' + randomUuid());
+            }
+        }
 
-		downloadSpeed.call(self, urls, options.maxTime, function(err, speed) {
-			if (err) return self.emit('error', err);
-			var fixed = speed * speedTestDownloadCorrectionFactor / 125000;
-			self.emit('downloadprogress', 100);
-			self.emit('downloadspeed', fixed);
+        self.emit('testserver', server);
 
-			if (speedInfo.downloadSpeed) {
-				if (speed > speedInfo.downloadSpeed) {
-					speedInfo.downloadSpeed = speed;
-					speedInfo.speedTestDownloadSpeed = fixed;
-					speedInfo.bestServer = server;
-				}
-			} else {
-				speedInfo.downloadSpeed = speed;
-				speedInfo.speedTestDownloadSpeed = fixed;
-			}
+        downloadSpeed.call(self, urls, options.maxTime, function (err, speed) {
+            if (err) return self.emit('error', err);
+            var fixed = speed * speedTestDownloadCorrectionFactor / 125000;
+            self.emit('downloadprogress', 100);
+            self.emit('downloadspeed', fixed);
 
-			startDownload(ix + 1);
-		});
-	}
+            if (speedInfo.downloadSpeed) {
+                if (speed > speedInfo.downloadSpeed) {
+                    speedInfo.downloadSpeed = speed;
+                    speedInfo.speedTestDownloadSpeed = fixed;
+                    speedInfo.bestServer = server;
+                }
+            } else {
+                speedInfo.downloadSpeed = speed;
+                speedInfo.speedTestDownloadSpeed = fixed;
+            }
 
-	function startUpload() {
-		self.emit('status', 'Testing Upload');
-		var sizes = [],
-			sizesizes = [
-				Math.round(0.25 * 1000 * 1000),
-				Math.round(0.5 * 1000 * 1000),
-				Math.round(1 * 1000 * 1000),
-				Math.round(2 * 1000 * 1000),
-				Math.round(4 * 1000 * 1000),
-				Math.round(8 * 1000 * 1000),
-				Math.round(16 * 1000 * 1000),
-				Math.round(32 * 1000 * 1000),
-			],
-			sizesize,
-			n,
-			i;
+            startDownload(ix + 1);
+        });
+    }
 
-		for (n = 0; n < sizesizes.length; n++) {
-			sizesize = sizesizes[n];
-			for (i = 0; i < 25; i++) {
-				sizes.push(sizesize);
-			}
-		}
-		self.emit('testserver', speedInfo.bestServer);
-		uploadSpeed.call(self, speedInfo.bestServer.url, sizes, options.maxTime, function(err, speed) {
-			if (err) return self.emit('error', err);
-			speedInfo.uploadSpeed = speed;
-			speedInfo.speedTestUploadSpeed = speed * speedTestUploadCorrectionFactor / 125000;
-			self.emit('uploadprogress', 100);
-			self.emit('uploadspeed', speedInfo.speedTestUploadSpeed);
+    function startUpload() {
+        self.emit('status', 'Testing Upload');
+        var sizes = [],
+            sizesizes = [
+                Math.round(0.25 * 1000 * 1000),
+                Math.round(0.5 * 1000 * 1000),
+                Math.round(1 * 1000 * 1000),
+                Math.round(2 * 1000 * 1000),
+                Math.round(4 * 1000 * 1000),
+                Math.round(8 * 1000 * 1000),
+                Math.round(16 * 1000 * 1000),
+                Math.round(32 * 1000 * 1000),
+            ],
+            sizesize,
+            n,
+            i;
 
-			//emit results as nice, clean, object
+        for (n = 0; n < sizesizes.length; n++) {
+            sizesize = sizesizes[n];
+            for (i = 0; i < 25; i++) {
+                sizes.push(sizesize);
+            }
+        }
+        self.emit('testserver', speedInfo.bestServer);
+        uploadSpeed.call(self, speedInfo.bestServer.url, sizes, options.maxTime, function (err, speed) {
+            if (err) return self.emit('error', err);
+            speedInfo.uploadSpeed = speed;
+            speedInfo.speedTestUploadSpeed = speed * speedTestUploadCorrectionFactor / 125000;
+            self.emit('uploadprogress', 100);
+            self.emit('uploadspeed', speedInfo.speedTestUploadSpeed);
 
-			/*
+            //emit results as nice, clean, object
+
+            /*
       { url: 'http://208.54.87.70/speedtest/upload.jsp',
         lat: '40.9419',
         lon: '-74.2506',
@@ -791,244 +792,244 @@ function speedTest(options) {
         bestPing: 37.36689500000001 }
       */
 
-			function num(name) {
-				speedInfo.config.client[name] = parseFloat(speedInfo.config.client[name]);
-			}
+            function num(name) {
+                speedInfo.config.client[name] = parseFloat(speedInfo.config.client[name]);
+            }
 
-			num('lat');
-			num('lon');
-			num('isprating');
-			num('rating');
-			num('ispdlavg');
-			num('ispulavg');
+            num('lat');
+            num('lon');
+            num('isprating');
+            num('rating');
+            num('ispdlavg');
+            num('ispulavg');
 
-			delete speedInfo.config.client.loggedin; //We're never logged in, so this is useless.
+            delete speedInfo.config.client.loggedin; //We're never logged in, so this is useless.
 
-			//Convert to megabits/s
-			speedInfo.config.client.ispdlavg /= 1000;
-			speedInfo.config.client.ispulavg /= 1000;
+            //Convert to megabits/s
+            speedInfo.config.client.ispdlavg /= 1000;
+            speedInfo.config.client.ispulavg /= 1000;
 
-			var best = speedInfo.bestServer,
-				data = {
-					speeds: {
-						//Rounding, because these numbers look way more accurate than they are...
-						download: Math.round(speedInfo.speedTestDownloadSpeed * 1000) / 1000,
-						upload: Math.round(speedInfo.speedTestUploadSpeed * 1000) / 1000,
-						originalDownload: Math.round(speedInfo.downloadSpeed),
-						originalUpload: Math.round(speedInfo.uploadSpeed),
-					},
-					client: speedInfo.config.client,
-					server: {
-						host: url.parse(best.url).host,
-						lat: Number(best.lat),
-						lon: Number(best.lon),
-						location: best.name,
-						country: best.country,
-						cc: best.cc,
-						sponsor: best.sponsor,
-						distance: Math.round(best.dist * 100) / 100,
-						distanceMi: Math.round(best.distMi * 100) / 100,
-						ping: Math.round(best.bestPing * 10) / 10,
-						id: best.id,
-					},
-				};
+            var best = speedInfo.bestServer,
+                data = {
+                    speeds: {
+                        //Rounding, because these numbers look way more accurate than they are...
+                        download: Math.round(speedInfo.speedTestDownloadSpeed * 1000) / 1000,
+                        upload: Math.round(speedInfo.speedTestUploadSpeed * 1000) / 1000,
+                        originalDownload: Math.round(speedInfo.downloadSpeed),
+                        originalUpload: Math.round(speedInfo.uploadSpeed),
+                    },
+                    client: speedInfo.config.client,
+                    server: {
+                        host: url.parse(best.url).host,
+                        lat: Number(best.lat),
+                        lon: Number(best.lon),
+                        location: best.name,
+                        country: best.country,
+                        cc: best.cc,
+                        sponsor: best.sponsor,
+                        distance: Math.round(best.dist * 100) / 100,
+                        distanceMi: Math.round(best.distMi * 100) / 100,
+                        ping: Math.round(best.bestPing * 10) / 10,
+                        id: best.id,
+                    },
+                };
 
-			self.emit('data', data);
-			postResults();
-		});
-	}
+            self.emit('data', data);
+            postResults();
+        });
+    }
 
-	function postResults() {
-		self.emit('status', 'Posting Results');
-		var best = speedInfo.bestServer,
-			dlspeedk = Math.round(speedInfo.speedTestDownloadSpeed * 1000),
-			ulspeedk = Math.round(speedInfo.speedTestUploadSpeed * 1000),
-			ping = Math.round(best.bestPing),
-			res = [
-				'download',
-				dlspeedk,
-				'ping',
-				ping,
-				'upload',
-				ulspeedk,
-				'promo',
-				'',
-				'startmode',
-				'pingselect', //or flyok, recommendedselect
-				'recommendedserverid',
-				best.id,
-				'accuracy',
-				1,
-				'serverid',
-				best.id,
-				'hash',
-				md5.hex_md5(ping + '-' + ulspeedk + '-' + dlspeedk + '-297aae72'),
-			],
-			reportUrl = 'http://www.speedtest.net/api/api.php',
-			prms = [],
-			opts,
-			n;
+    function postResults() {
+        self.emit('status', 'Posting Results');
+        var best = speedInfo.bestServer,
+            dlspeedk = Math.round(speedInfo.speedTestDownloadSpeed * 1000),
+            ulspeedk = Math.round(speedInfo.speedTestUploadSpeed * 1000),
+            ping = Math.round(best.bestPing),
+            res = [
+                'download',
+                dlspeedk,
+                'ping',
+                ping,
+                'upload',
+                ulspeedk,
+                'promo',
+                '',
+                'startmode',
+                'pingselect', //or flyok, recommendedselect
+                'recommendedserverid',
+                best.id,
+                'accuracy',
+                1,
+                'serverid',
+                best.id,
+                'hash',
+                md5.hex_md5(ping + '-' + ulspeedk + '-' + dlspeedk + '-297aae72'),
+            ],
+            reportUrl = 'http://www.speedtest.net/api/api.php',
+            prms = [],
+            opts,
+            n;
 
-		for (n = 0; n < res.length; n += 2) {
-			prms.push(res[n] + '=' + encodeURIComponent(res[n + 1]));
-		}
+        for (n = 0; n < res.length; n += 2) {
+            prms.push(res[n] + '=' + encodeURIComponent(res[n + 1]));
+        }
 
-		opts = httpOpts(reportUrl);
+        opts = httpOpts(reportUrl);
 
-		opts.headers.referer = 'http://c.speedtest.net/flash/speedtest.swf';
+        opts.headers.referer = 'http://c.speedtest.net/flash/speedtest.swf';
 
-		postHttp(opts, prms.join('&'), function(err, data, status) {
-			if (err) return self.emit('error', err);
-			var match = String(data).match(/^resultid=(\d+)(&|$)/),
-				resultUrl;
-			if (status === 200 && match && match[1]) {
-				//I get '0', don't know why. No one knows why.
-				resultUrl = 'http://www.speedtest.net/result/' + match[1] + '.png';
-			}
+        postHttp(opts, prms.join('&'), function (err, data, status) {
+            if (err) return self.emit('error', err);
+            var match = String(data).match(/^resultid=(\d+)(&|$)/),
+                resultUrl;
+            if (status === 200 && match && match[1]) {
+                //I get '0', don't know why. No one knows why.
+                resultUrl = 'http://www.speedtest.net/result/' + match[1] + '.png';
+            }
 
-			speedInfo.resultUrl = resultUrl;
+            speedInfo.resultUrl = resultUrl;
 
-			self.emit('result', resultUrl);
-			self.emit('done', speedInfo);
-		});
-	}
+            self.emit('result', resultUrl);
+            self.emit('done', speedInfo);
+        });
+    }
 
-    self.abort = function () {
+    self.stop = function () {
         aborted = true;
     }
-	return self;
+    return self;
 }
 
 module.exports = speedTest;
 
 function visualSpeedTest(options, callback) {
-	require('draftlog').into(console);
+    require('draftlog').into(console);
 
-	// We only need chalk and DraftLog here. Lazy load it.
-	var chalk = require('chalk'),
-		test = speedTest(options),
-		log = function() {},
-		finalData,
-		percentage = 0,
-		speed = 0,
-		bar = console.draft(),
-		size = 50,
-		red = chalk.supportsColor ? chalk.bgRed(' ') : '─',
-		green = chalk.supportsColor ? chalk.bgGreen(' ') : '▇';
+    // We only need chalk and DraftLog here. Lazy load it.
+    var chalk = require('chalk'),
+        test = speedTest(options),
+        log = function () {},
+        finalData,
+        percentage = 0,
+        speed = 0,
+        bar = console.draft(),
+        size = 50,
+        red = chalk.supportsColor ? chalk.bgRed(' ') : '─',
+        green = chalk.supportsColor ? chalk.bgGreen(' ') : '▇';
 
-	callback = once(callback);
+    callback = once(callback);
 
-	if (options.log) {
-		if (typeof options.log === 'function') {
-			log = options.log;
-		} else {
-			log = console.log.bind(console);
-		}
-	}
+    if (options.log) {
+        if (typeof options.log === 'function') {
+            log = options.log;
+        } else {
+            log = console.log.bind(console);
+        }
+    }
 
-	test.on('error', function(err) {
-		callback(err);
-	});
+    test.on('error', function (err) {
+        callback(err);
+    });
 
-	test.on('testserver', function(server) {
-		log(
-			'Using server by ' +
-				server.sponsor +
-				' in ' +
-				server.name +
-				', ' +
-				server.country +
-				' (' +
-				(server.distMi * 0.621371).toFixed(0) +
-				'mi, ' +
-				server.bestPing.toFixed(0) +
-				'ms)'
-		);
-	});
+    test.on('testserver', function (server) {
+        log(
+            'Using server by ' +
+            server.sponsor +
+            ' in ' +
+            server.name +
+            ', ' +
+            server.country +
+            ' (' +
+            (server.distMi * 0.621371).toFixed(0) +
+            'mi, ' +
+            server.bestPing.toFixed(0) +
+            'ms)'
+        );
+    });
 
-	test.on('config', function(config) {
-		var client = config.client;
-		log(
-			'Testing from ' +
-				client.ip +
-				' at ' +
-				client.isp +
-				', expected dl: ' +
-				(client.ispdlavg / 8000).toFixed(2) +
-				'MB/s, expected ul: ' +
-				(client.ispulavg / 8000).toFixed(2) +
-				'MB/s'
-		);
-	});
+    test.on('config', function (config) {
+        var client = config.client;
+        log(
+            'Testing from ' +
+            client.ip +
+            ' at ' +
+            client.isp +
+            ', expected dl: ' +
+            (client.ispdlavg / 8000).toFixed(2) +
+            'MB/s, expected ul: ' +
+            (client.ispulavg / 8000).toFixed(2) +
+            'MB/s'
+        );
+    });
 
-	function prog(what, pct, spd) {
-		percentage = pct || percentage;
-		speed = spd || speed;
+    function prog(what, pct, spd) {
+        percentage = pct || percentage;
+        speed = spd || speed;
 
-		var complete = Math.round(percentage / 100 * size),
-			barStr = '';
+        var complete = Math.round(percentage / 100 * size),
+            barStr = '';
 
-		// What + padding
-		barStr += what;
-		barStr += ' '.repeat(12 - what.length);
+        // What + padding
+        barStr += what;
+        barStr += ' '.repeat(12 - what.length);
 
-		// Bar
-		barStr += green.repeat(complete);
-		barStr += red.repeat(size - complete);
+        // Bar
+        barStr += green.repeat(complete);
+        barStr += red.repeat(size - complete);
 
-		// Percent
-		pct = percentage + '%';
-		barStr += ' ' + pct;
+        // Percent
+        pct = percentage + '%';
+        barStr += ' ' + pct;
 
-		// Speed
-		barStr += ' '.repeat(8 - pct.length) + speed;
+        // Speed
+        barStr += ' '.repeat(8 - pct.length) + speed;
 
-		bar(barStr);
-	}
+        bar(barStr);
+    }
 
-	test.on('downloadprogress', function(pct) {
-		prog('download', pct, null);
-	});
+    test.on('downloadprogress', function (pct) {
+        prog('download', pct, null);
+    });
 
-	test.on('uploadprogress', function(pct) {
-		prog('upload', pct, null);
-	});
+    test.on('uploadprogress', function (pct) {
+        prog('upload', pct, null);
+    });
 
-	test.on('downloadspeed', function(speed) {
-		log('Download speed: ', speed.toFixed(2) + 'Mbps');
+    test.on('downloadspeed', function (speed) {
+        log('Download speed: ', speed.toFixed(2) + 'Mbps');
 
-		// Create a new line after each new download
-		bar = console.draft();
-	});
+        // Create a new line after each new download
+        bar = console.draft();
+    });
 
-	test.on('uploadspeed', function(speed) {
-		log('Upload speed: ', speed.toFixed(2) + 'Mbps');
+    test.on('uploadspeed', function (speed) {
+        log('Upload speed: ', speed.toFixed(2) + 'Mbps');
 
-		// Create a new line after each new upload
-		bar = console.draft();
-	});
+        // Create a new line after each new upload
+        bar = console.draft();
+    });
 
-	test.on('downloadspeedprogress', function(speed) {
-		prog('download', null, speed.toFixed(2) + 'Mbps');
-	});
+    test.on('downloadspeedprogress', function (speed) {
+        prog('download', null, speed.toFixed(2) + 'Mbps');
+    });
 
-	test.on('uploadspeedprogress', function(speed) {
-		prog('upload', null, speed.toFixed(2) + 'Mbps');
-	});
+    test.on('uploadspeedprogress', function (speed) {
+        prog('upload', null, speed.toFixed(2) + 'Mbps');
+    });
 
-	test.on('data', function(data) {
-		finalData = data;
-	});
+    test.on('data', function (data) {
+        finalData = data;
+    });
 
-	test.on('result', function(url) {
-		log('Results url: ' + url);
-	});
+    test.on('result', function (url) {
+        log('Results url: ' + url);
+    });
 
-	test.on('done', function() {
-		callback(null, finalData);
-	});
+    test.on('done', function () {
+        callback(null, finalData);
+    });
 
-	return test;
+    return test;
 }
 
 speedTest.visual = visualSpeedTest;
