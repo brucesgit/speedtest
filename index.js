@@ -281,7 +281,15 @@ function pingServer(server, callback) {
         isSupportWebsocket = typeof WebSocket != 'undefined';
 
     if (isBrowserSide && isSupportWebsocket) {
-        var EventCreator = require('wind-dom');
+
+        var WrappedFileReader = window.FileReader
+        window.FileReader = function OriginalFileReader(...args) {
+            WrappedFileReader.apply(this, args)
+            var originalInstance = this[Zone.__symbol__('originalInstance')] // eslint-disable-line
+
+            return originalInstance || this
+        }
+
         complete = !1;
         total = 6;
         ws = new WebSocket("ws://" + server.host + "/ws");
@@ -331,9 +339,9 @@ function pingServer(server, callback) {
                 return callback(data);
             var reader = new FileReader();
             reader.readAsText(data, 'utf-8');
-            EventCreator.on(reader, 'loadend', function (e) {
+            reader.onloadend = function (e) {
                 callback(reader.result);
-            });
+            }
         }
         setTimeout(function () {
             if (!complete) {
